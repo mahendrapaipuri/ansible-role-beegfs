@@ -9,7 +9,15 @@ The role was last tested using Ansible version 2.5.0.
 
 ## Example
 
-Say we have an inventory that looks like this (`inventory-beegfs`):
+Install the current role from git using
+
+```bash
+ansible-galaxy role install git+https://github.com/mahendrapaipuri/ansible-role-beegfs,upgrade_to_v8
+```
+
+on the Ansible controller.
+
+Say we have an inventory that looks like this (`hostfile`):
 
 ```ini
 [leader]
@@ -50,7 +58,7 @@ And a corresponding playbook as this (`beegfs.yml`):
   - cluster_beegfs_oss
   - cluster_beegfs_client 
   roles:
-  - role: stackhpc.beegfs
+  - role: ansible-role-beegfs
     beegfs_enable:
       admon: false
       mgmt: "{{ inventory_hostname in groups['cluster_beegfs_mgmt'] }}"
@@ -79,13 +87,13 @@ And a corresponding playbook as this (`beegfs.yml`):
 To create a cluster:
 
 ```bash
-ansible-playbook beegfs.yml -i inventory-beegfs -e beegfs_state=present
+ansible-playbook beegfs.yml -i hostfile -e beegfs_state=present
 ```
 
 To destroy a cluster:
 
 ```bash
-ansible-playbook beegfs.yml -i inventory-beegfs -e beegfs_state=absent
+ansible-playbook beegfs.yml -i hostfile -e beegfs_state=absent
 ```
 
 ## Notes
