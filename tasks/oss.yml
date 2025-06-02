@@ -35,7 +35,7 @@
     - name: Fail if OSS device does not exist
       fail:
         msg: OSS device {{ oss_dev }} does not exist
-      when: not oss_dev_stat.exists
+      when: not oss_dev_stat.stat.exists
     - name: Unmount storage device if beegfs_force_format is true
       mount:
         path: "{{ oss_path }}"
@@ -44,7 +44,7 @@
       notify: Restart BeeGFS storage service
     - name: Attempt to format if the device is not mounted or if beegfs_force_format is true
       vars:
-        oss_dev_real: "{{ oss_dev_stat.lnk_source if oss_dev_stat.islnk else oss_dev_stat.path }}"
+        oss_dev_real: "{{ oss_dev_stat.stat.lnk_source if oss_dev_stat.stat.islnk else oss_dev_stat.stat.path }}"
       filesystem:
         dev: "{{ oss_dev }}"
         fstype: "{{ beegfs_fstype }}"
@@ -73,25 +73,16 @@
     -p {{ oss_path }} {{ oss_replace }} \
     -m {{ beegfs_mgmt_host }} \
     -c /etc/beegfs/{{ oss_port }}.d/beegfs-storage.conf \
-    -S {{ inventory_hostname }}-{{ oss_port }} \
-  args:
-    creates: "{{ oss_path }}/originalNodeID"
+    -s {{ oss_server_id }} \
+    -i {{ oss_target_id }}
   become: true
   notify: Restart BeeGFS storage service
 
 - name: set TCP storage port
   lineinfile:
     path: "/etc/beegfs/{{ oss_port }}.d/beegfs-storage.conf"
-    regexp: '^connStoragePortTCP'
-    line: "connStoragePortTCP = {{ oss_port }}"
-  become: true
-  notify: Restart BeeGFS storage service
-
-- name: set UDP storage port
-  lineinfile:
-    path: "/etc/beegfs/{{ oss_port }}.d/beegfs-storage.conf"
-    regexp: '^connStoragePortUDP'
-    line: "connStoragePortUDP = {{ oss_port }}"
+    regexp: '^connStoragePort'
+    line: "connStoragePort = {{ oss_port }}"
   become: true
   notify: Restart BeeGFS storage service
 

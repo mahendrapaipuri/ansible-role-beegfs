@@ -6,25 +6,24 @@
   become: true
   notify: Restart BeeGFS mgmt service
 
-- name: Create directory for BeeGFS management service data
-  file:
-    path: "{{ beegfs_mgmt_path }}"
-    state: directory
+- name: Configure interfaces in mgmt config file
+  lineinfile:
+    dest: "/etc/beegfs/beegfs-mgmtd.toml"
+    regexp: "^# interfaces"
+    line: "interfaces = {{ beegfs_interfaces }}"
   become: true
-  notify: Restart BeeGFS mgmt service
+
+- name: Configure quota enable in mgmt config file
+  lineinfile:
+    dest: "/etc/beegfs/beegfs-mgmtd.toml"
+    regexp: "^# quota-enable"
+    line: "quota-enable = true"
+  become: true
 
 - name: Run management service setup script
-  command: "/opt/beegfs/sbin/beegfs-setup-mgmtd -p {{ beegfs_mgmt_path }} -f"
+  command: "/opt/beegfs/sbin/beegfs-mgmtd --init"
   args:
-    creates: "{{ beegfs_mgmt_path }}/originalNodeID"
-  become: true
-  notify: Restart BeeGFS mgmt service
-
-- name: Specify connInterfacesFile
-  lineinfile:
-    path: /etc/beegfs/beegfs-mgmtd.conf
-    regexp: "^connInterfacesFile"
-    line: "connInterfacesFile           = /etc/beegfs/connInterfacesFile"
+    creates: "/var/lib/beegfs/mgmtd.sqlite"
   become: true
   notify: Restart BeeGFS mgmt service
 ...

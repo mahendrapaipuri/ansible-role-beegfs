@@ -1,11 +1,9 @@
-[![Build Status](https://travis-ci.com/stackhpc/ansible-role-beegfs.svg?branch=master)](https://travis-ci.com/stackhpc/ansible-role-beegfs)
-
 # stackhpc.beegfs
 
 This Ansible role can be used to create and destroy a BeegFS cluster. In
 summary, BeegFS is a parallel file system that spreads user data across
 multiple servers. It is designed to be scalable both in terms of
-performance and capacity. Learn more about BeeFS [here](www.beegfs.io).
+performance and capacity. Learn more about BeeFS [docs](www.beegfs.io).
 
 The role was last tested using Ansible version 2.5.0.
 
@@ -13,72 +11,82 @@ The role was last tested using Ansible version 2.5.0.
 
 Say we have an inventory that looks like this (`inventory-beegfs`):
 
-    [leader]
-    bgfs1 ansible_host=172.16.1.1 ansible_user=centos
+```ini
+[leader]
+# beegfs_server_id must be unique foe every server and leave enough spaces
+# between two server IDs as they will be used up by target IDs based on number
+# disks available on each server.
+bgfs1 ansible_user=root beegfs_server_id=100
 
-    [follower]
-    bgfs2 ansible_host=172.16.1.2 ansible_user=centos
+[follower]
+bgfs2 ansible_user=root beegfs_server_id=200
 
-    [cluster:children]
-    leader
-    follower
+[cluster:children]
+leader
+follower
 
-    [cluster_beegfs_mgmt:children]
-    leader
+[cluster_beegfs_mgmt:children]
+leader
 
-    [cluster_beegfs_mds:children]
-    leader
+[cluster_beegfs_mds:children]
+leader
 
-    [cluster_beegfs_oss:children]
-    leader
-    follower
+[cluster_beegfs_oss:children]
+leader
+follower
 
-    [cluster_beegfs_client:children]
-    leader
-    follower
+[cluster_beegfs_client:children]
+leader
+follower
+```
 
 And a corresponding playbook as this (`beegfs.yml`):
 
-    ---
-    - hosts:
-      - cluster_beegfs_mgmt
-      - cluster_beegfs_mds
-      - cluster_beegfs_oss
-      - cluster_beegfs_client 
-      roles:
-      - role: stackhpc.beegfs
-        beegfs_enable:
-          admon: false
-          mgmt: "{{ inventory_hostname in groups['cluster_beegfs_mgmt'] }}"
-          meta: "{{ inventory_hostname in groups['cluster_beegfs_mds'] }}"
-          oss: "{{ inventory_hostname in groups['cluster_beegfs_oss'] }}"
-          tuning: "{{ inventory_hostname in groups['cluster_beegfs_oss'] }}"
-          client: "{{ inventory_hostname in groups['cluster_beegfs_client'] }}"
-        beegfs_oss:
-        - dev: "/dev/sdb"
-          port: 8003
-        - dev: "/dev/sdc"
-          port: 8103
-        - dev: "/dev/sdd"
-          port: 8203
-        beegfs_mgmt_host: "{{ groups['cluster_beegfs_mgmt'] | first }}"
-        beegfs_client:
-        - path: "/mnt/beegfs"
-          port: 8004
-        beegfs_fstype: "xfs"
-        beegfs_force_format: false
-        beegfs_interfaces: ["ib0"]
-        beegfs_rdma: true
-        beegfs_state: present
-    ...
+```yaml
+---
+- hosts:
+  - cluster_beegfs_mgmt
+  - cluster_beegfs_mds
+  - cluster_beegfs_oss
+  - cluster_beegfs_client 
+  roles:
+  - role: stackhpc.beegfs
+    beegfs_enable:
+      admon: false
+      mgmt: "{{ inventory_hostname in groups['cluster_beegfs_mgmt'] }}"
+      meta: "{{ inventory_hostname in groups['cluster_beegfs_mds'] }}"
+      oss: "{{ inventory_hostname in groups['cluster_beegfs_oss'] }}"
+      tuning: "{{ inventory_hostname in groups['cluster_beegfs_oss'] }}"
+      client: "{{ inventory_hostname in groups['cluster_beegfs_client'] }}"
+    beegfs_oss:
+    - dev: "/dev/sdb"
+      port: 8003
+    - dev: "/dev/sdc"
+      port: 8103
+    - dev: "/dev/sdd"
+      port: 8203
+    beegfs_mgmt_host: "{{ groups['cluster_beegfs_mgmt'] | first }}"
+    beegfs_client:
+    - path: "/mnt/beegfs"
+      port: 8004
+    beegfs_fstype: "xfs"
+    beegfs_force_format: false
+    beegfs_interfaces: ["ib0"]
+    beegfs_rdma: true
+    beegfs_state: present
+```
 
 To create a cluster:
 
-    # ansible-playbook beegfs.yml -i inventory-beegfs -e beegfs_state=present
+```bash
+ansible-playbook beegfs.yml -i inventory-beegfs -e beegfs_state=present
+```
 
 To destroy a cluster:
 
-    # ansible-playbook beegfs.yml -i inventory-beegfs -e beegfs_state=absent
+```bash
+ansible-playbook beegfs.yml -i inventory-beegfs -e beegfs_state=absent
+```
 
 ## Notes
 
@@ -109,32 +117,66 @@ not live under `/sys/block/`. For example, to create partitions using an
 Ansible module called `parted` (works on Ansible version 2.5+), you can run the
 following playbook:
 
-    ---
-    - hosts:
-      - cluster_beegfs_oss
-      vars:
-        partitions:
-        - dev: /dev/sdb
-          start: 0%
-          end: 50%
-          number: 1
-        - dev: /dev/sdb
-          start: 50%
-          end: 100%
-          number: 2
-      tasks:
-      - name: Create partitions
-        parted:
-          label: gpt
-          state: present
-          part_type: primary
-          device: "{{ item.dev }}"
-          part_start: "{{ item.start }}"
-          part_end: "{{ item.end }}"
-          number: "{{ item.number }}"
-        with_items: "{{ partitions }}"
-        become: true
-    ...
+```yaml
+---
+- hosts:
+  - cluster_beegfs_oss
+  vars:
+    partitions:
+    - dev: /dev/sdb
+      start: 0%
+      end: 50%
+      number: 1
+    - dev: /dev/sdb
+      start: 50%
+      end: 100%
+      number: 2
+  tasks:
+  - name: Create partitions
+    parted:
+      label: gpt
+      state: present
+      part_type: primary
+      device: "{{ item.dev }}"
+      part_start: "{{ item.start }}"
+      part_end: "{{ item.end }}"
+      number: "{{ item.number }}"
+    with_items: "{{ partitions }}"
+    become: true
+...
+```
+
+## Benchmarks
+
+BeegFS provides an in-built benchmarking tool which can be used to do preliminary tests.
+It allows to custom block size and number of processes writing from each client. A typical
+test can be run as follows:
+
+```bash
+beegfs --tls-disable-verification benchmark start -b 1MiB -n 32 --watch 1s
+```
+
+The above command will write to file system from all clients with a block size of 1MiB and
+32 concurrent processes writing to each storage target (device). More options can be found
+using `beegfs benchmark start --help` command.
+
+We can use standard `dd` command to perform IO tests as well. For that it is better to install
+[`ClusterShell`](https://clustershell.readthedocs.io/en/latest/) on the Ansible controller so
+that we can run parallel tests from all clients
+at once. For instance, if there are two clients, `client-0` and `client-1` and we want to
+write to file system from both clients, we can run the following:
+
+```bash
+clush -bw client-[0,1] 'dd if=/dev/zero of=/mnt/beegfs/test-`hostname`.dat bs=1M count=8192'
+```
+
+This will write the sample file from each client to file system at `/mnt/beegfs` and report
+the write bandwidths at the end of the test.
+
+For more advanced tests, typically [IOR](https://github.com/hpc/ior) is used. However, this
+requires to install MPI on the nodes and there must be a process manager that spawns and manages
+the life cycle of MPI processes which can be quite some work. It is ideal to perform as many
+benchmarks as possible with standard `dd` tool and `clush` to recreate the scenarios.
 
 ## Tests
 
@@ -147,7 +189,7 @@ Some tests are provided in [molecule folder](molecule). To run them locally you 
 
 Once you have all the dependencies installed you can run the tests from the root folder of the role:
 
-```
+```bash
 $> molecule lint
 $> molecule test
 $> molecule test -s vagrant-ubuntu-16.04

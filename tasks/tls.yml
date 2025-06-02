@@ -1,0 +1,87 @@
+---
+# These tasks creates self signed certificates when self_signed_certs
+# is set to true
+
+- name: Create TLS self signed certificates on Ansible controller
+  delegate_to: localhost
+  run_once: true
+  block:
+    - name: Create a directory {{ playbook_dir }}/secrets/tls
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/secrets/tls"
+        state: directory
+        mode: '0750'
+
+    - name: Create private key for CA
+      community.crypto.openssl_privatekey:
+        path: "{{ playbook_dir }}/secrets/tls/ca-key.pem"
+
+    - name: Check whether certificate exists
+      stat:
+        path: "{{ playbook_dir }}/secrets/tls/ca-cert.pem"
+      register: _ca_certificate_exists
+
+    - name: Create certificate signing request (CSR) for CA certificate
+      community.crypto.openssl_csr_pipe:
+        privatekey_path: "{{ playbook_dir }}/secrets/tls/ca-key.pem"
+        common_name: BeegFS CA
+        use_common_name_for_san: false # since we do not specify SANs, don't use CN as a SAN
+        basic_constraints:
+          - CA:TRUE
+        basic_constraints_critical: true
+        key_usage:
+          - keyCertSign
+        key_usage_critical: true
+      register: ca_csr
+      when: not _ca_certificate_exists.stat.exists
+
+    - name: Create self-signed CA certificate from CSR
+      community.crypto.x509_certificate:
+        path: "{{ playbook_dir }}/secrets/tls/ca-cert.pem"
+        csr_content: "{{ ca_csr.csr }}"
+        privatekey_path: "{{ playbook_dir }}/secrets/tls/ca-key.pem"
+        provider: selfsigned
+      when: not _ca_certificate_exists.stat.exists
+
+    - name: Create private key for new certificate
+      community.crypto.openssl_privatekey:
+        path: "{{ playbook_dir }}/secrets/tls/key.pem"
+
+    - name: Check whether certificate exists
+      stat:
+        path: "{{ playbook_dir }}/secrets/tls/cert.pem"
+      register: _certificate_exists
+
+    - name: Create certificate signing request (CSR) for new certificate
+      community.crypto.openssl_csr_pipe:
+        privatekey_path: "{{ playbook_dir }}/secrets/tls/key.pem"
+        subject_alt_name: "{{ groups['all'] | map('regex_replace', '^', 'DNS:') | list  }}"
+      register: csr
+      when: not _certificate_exists.stat.exists
+
+    - name: Sign certificate with our CA
+      community.crypto.x509_certificate_pipe:
+        csr_content: "{{ csr.csr }}"
+        provider: ownca
+        ownca_path: "{{ playbook_dir }}/secrets/tls/ca-cert.pem"
+        ownca_privatekey_path: "{{ playbook_dir }}/secrets/tls/ca-key.pem"
+        ownca_not_after: +365d # valid for one year
+        ownca_not_before: -1d # valid since yesterday
+      register: certificate
+      when: not _certificate_exists.stat.exists
+
+    - name: Write certificate file
+      copy:
+        dest: "{{ playbook_dir }}/secrets/tls/cert.pem"
+        content: "{{ certificate.certificate }}"
+        mode: "0644"
+      when: not _certificate_exists.stat.exists
+
+- name: Copy TLS cert files to all nodes in the cluster
+  copy:
+    src: "{{ playbook_dir }}/secrets/tls/"
+    dest: "/etc/beegfs/"
+    owner: "root"
+    group: "root"
+    mode: "400"
+  become: true

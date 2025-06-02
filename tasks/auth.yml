@@ -1,0 +1,33 @@
+---
+
+- name: Create auth secret on Ansible controller
+  delegate_to: localhost
+  run_once: true
+  block:
+    - name: Create a directory {{ playbook_dir }}/secrets
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/secrets"
+        state: directory
+        mode: '0750'
+
+    - name: Check if conn.auth already exists on Ansible controller
+      stat:
+        path: "{{ playbook_dir }}/secrets/conn.auth"
+      register: _conn_auth_exists
+
+    - name: Create auth secret on Ansible controller
+      command: "dd if=/dev/random of={{ playbook_dir }}/secrets/conn.auth bs=128 count=1"
+      args:
+        creates: "{{ playbook_dir }}/secrets/conn.auth"
+      when: not _conn_auth_exists.stat.exists
+
+- name: Copy auth file to all nodes in the cluster
+  copy:
+    src: "{{ playbook_dir }}/secrets/conn.auth"
+    dest: "/etc/beegfs/conn.auth"
+    owner: "root"
+    group: "root"
+    mode: "400"
+  delegate_to: "{{ item }}"
+  with_items: "{{ groups['all'] }}"
+  become: true

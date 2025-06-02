@@ -43,9 +43,7 @@
     - beegfs_meta_dev != None
 
 - name: Run metadata service setup script
-  command: "/opt/beegfs/sbin/beegfs-setup-meta -p {{ beegfs_meta_path }} -m {{ beegfs_mgmt_host }} -f"
-  args:
-    creates: "{{ beegfs_meta_path }}/originalNodeID"
+  command: "/opt/beegfs/sbin/beegfs-setup-meta -p {{ beegfs_meta_path }} -m {{ beegfs_mgmt_host }} -s {{ beegfs_server_id | default(4096 | random(seed=inventory_hostname, start=1, step=1)) | int }} -f"
   become: true
   notify: Restart BeeGFS meta service
 
